@@ -1,0 +1,97 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <h1 class="main-heading">🤖 AI Personal Assistant</h1>
+
+    <div class="container">
+
+        <!-- ASK SECTION -->
+        <h2>Ask Anything</h2>
+        <form id="askForm">
+            <input type="text" name="question" placeholder="Ask anything.." required>
+            <button type="submit">Ask</button>
+        </form>
+        <p id="ask-loading" style="display:none;">Processing...</p>
+        <p id="answer"></p>
+
+        <hr>
+
+        <!-- EMAIL SUMMARIZER -->
+        <h2>Summarize Email</h2>
+        <form id="emailForm">
+            <textarea name="email" rows="6" placeholder="Paste your email here..." required></textarea>
+            <button type="submit">Summarize</button>
+        </form>
+        <p id="summary-loading" style="display:none;">Processing...</p>
+        <p id="summary"></p>
+
+    </div>
+
+
+    <!-- ========================= -->
+    <!-- JAVASCRIPT -->
+    <!-- ========================= -->
+    <script>
+        // ASK API
+        document.getElementById("askForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+
+            const question = this.question.value;
+
+            document.getElementById("ask-loading").style.display = "block";
+            document.getElementById("answer").innerText = "";
+
+            const response = await fetch("/ask", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ question: question })
+            });
+
+            const data = await response.json();
+
+            document.getElementById("ask-loading").style.display = "none";
+
+            document.getElementById("answer").innerText =
+                data.response || data.error;
+        });
+
+
+        // EMAIL SUMMARIZER
+        document.getElementById("emailForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+
+            const email = this.email.value;
+
+            document.getElementById("summary-loading").style.display = "block";
+            document.getElementById("summary").innerText = "";
+
+            const response = await fetch("/summarize", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ email: email })
+            });
+
+            const data = await response.json();
+
+            document.getElementById("summary-loading").style.display = "none";
+
+            document.getElementById("summary").innerText =
+                data.summary || data.error;
+        });
+    </script>
+
+</body>
+</html>
