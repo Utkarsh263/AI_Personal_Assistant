@@ -181,6 +181,9 @@ http://127.0.0.1:5000/
 * Flask Web Development
 
 ---
+## 🌐 Live Demo
+
+[🔗 Open AI Personal Assistant](https://ai-personal-assistant-nlpg.onrender.com/)
 
 ## 🎯 Future Improvements
 
