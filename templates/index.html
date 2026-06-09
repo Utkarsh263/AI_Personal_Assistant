@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Assistant</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body>
+  <div class="shell">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon"><i class="ti ti-robot"></i></div>
+        <span>AI Assistant</span>
+      </div>
+      <nav>
+        <button class="nav-item active" data-tab="chat"><i class="ti ti-message-circle"></i> Chat</button>
+        <button class="nav-item" data-tab="summarize"><i class="ti ti-mail"></i> Summarize</button>
+        <button class="nav-item" data-tab="rewrite"><i class="ti ti-pencil"></i> Rewrite</button>
+        <button class="nav-item" data-tab="todos"><i class="ti ti-list-check"></i> To-Do Extractor</button>
+      </nav>
+      <div class="sidebar-footer">
+        <p class="history-label">Recent chats</p>
+        <div id="historyList"></div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- ── TAB: CHAT ── -->
+      <div id="tab-chat" class="tab-panel active">
+        <div class="topbar">
+          <span class="topbar-title">Chat</span>
+          <div class="tone-bar">
+            <button class="tone-btn active" data-tone="professional">Professional</button>
+            <button class="tone-btn" data-tone="casual">Casual</button>
+            <button class="tone-btn" data-tone="concise">Concise</button>
+          </div>
+        </div>
+        <div class="chat-area" id="chatArea">
+          <div class="empty-state">
+            <i class="ti ti-message-circle"></i>
+            <p>Ask me anything</p>
+          </div>
+        </div>
+        <div class="input-bar">
+          <div class="input-wrap">
+            <input type="text" id="chatInput" placeholder="Ask anything..." maxlength="500" />
+            <span class="char-count" id="chatCount">0/500</span>
+          </div>
+          <button class="send-btn" id="sendChat"><i class="ti ti-send"></i></button>
+        </div>
+      </div>
+
+      <!-- ── TAB: SUMMARIZE ── -->
+      <div id="tab-summarize" class="tab-panel">
+        <div class="topbar"><span class="topbar-title">Email Summarizer</span></div>
+        <div class="tool-body">
+          <textarea id="emailInput" placeholder="Paste your email here..." rows="7"></textarea>
+          <button class="action-btn" id="sendSummarize"><i class="ti ti-wand"></i> Summarize</button>
+          <div id="summaryLoading" class="loading-text" style="display:none">Summarizing...</div>
+          <div class="output-box" id="summaryOutput" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- ── TAB: REWRITE ── -->
+      <div id="tab-rewrite" class="tab-panel">
+        <div class="topbar">
+          <span class="topbar-title">Text Rewriter</span>
+          <select id="rewriteStyle">
+            <option value="professional">Professional</option>
+            <option value="casual">Casual</option>
+            <option value="formal">Formal</option>
+            <option value="simple">Simple</option>
+          </select>
+        </div>
+        <div class="tool-body">
+          <textarea id="rewriteInput" placeholder="Paste any text to rewrite..." rows="7"></textarea>
+          <button class="action-btn" id="sendRewrite"><i class="ti ti-pencil"></i> Rewrite</button>
+          <div id="rewriteLoading" class="loading-text" style="display:none">Rewriting...</div>
+          <div class="output-box" id="rewriteOutput" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- ── TAB: TO-DOS ── -->
+      <div id="tab-todos" class="tab-panel">
+        <div class="topbar"><span class="topbar-title">To-Do Extractor</span></div>
+        <div class="tool-body">
+          <textarea id="todosInput" placeholder="Paste meeting notes, emails, or any text..." rows="7"></textarea>
+          <button class="action-btn" id="sendTodos"><i class="ti ti-list-check"></i> Extract To-Dos</button>
+          <div id="todosLoading" class="loading-text" style="display:none">Extracting...</div>
+          <div class="output-box" id="todosOutput" style="display:none"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+<script>
+  // ── STATE ──
+  let chatHistory = [];
+  let currentTone = "professional";
+  let historyLog = [];
+
+  // ── TABS ──
+  document.querySelectorAll(".nav-item[data-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ── TONE ──
+  document.querySelectorAll(".tone-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tone-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentTone = btn.dataset.tone;
+    });
+  });
+
+  // ── CHAR COUNTER ──
+  document.getElementById("chatInput").addEventListener("input", function() {
+    document.getElementById("chatCount").textContent = this.value.length + "/500";
+  });
+
+  // ── CHAT ──
+  function appendMessage(role, text) {
+    const area = document.getElementById("chatArea");
+    const empty = area.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.innerHTML = `<div class="msg-text">${text.replace(/\n/g, "<br>")}</div>`;
+
+    if (role === "ai") {
+      const actions = document.createElement("div");
+      actions.className = "msg-actions";
+      actions.innerHTML = `
+        <button class="msg-action-btn" onclick="copyText(this, \`${text.replace(/`/g, "\\`")}\`)"><i class="ti ti-copy"></i> Copy</button>
+        <button class="msg-action-btn" onclick="speakText(\`${text.replace(/`/g, "\\`")}\`)"><i class="ti ti-volume"></i> Speak</button>
+      `;
+      div.appendChild(actions);
+    }
+
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+    return div;
+  }
+
+  function showTyping() {
+    const area = document.getElementById("chatArea");
+    const div = document.createElement("div");
+    div.className = "msg ai typing-indicator";
+    div.id = "typingDot";
+    div.innerHTML = `<span></span><span></span><span></span>`;
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById("typingDot");
+    if (t) t.remove();
+  }
+
+  async function sendChat() {
+    const input = document.getElementById("chatInput");
+    const q = input.value.trim();
+    if (!q) return;
+
+    appendMessage("user", q);
+    chatHistory.push({ role: "user", content: q });
+    input.value = "";
+    document.getElementById("chatCount").textContent = "0/500";
+
+    // save to sidebar history
+    if (historyLog.length < 5) {
+      historyLog.unshift(q.slice(0, 35) + (q.length > 35 ? "…" : ""));
+      renderHistory();
+    }
+
+    showTyping();
+
+    const res = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q,
+        tone: currentTone,
+        history: chatHistory.slice(-10)  // send last 10 turns max
+      })
+    });
+    const data = await res.json();
+    removeTyping();
+
+    const answer = data.response || data.error;
+    appendMessage("ai", answer);
+    chatHistory.push({ role: "assistant", content: answer });
+  }
+
+  document.getElementById("sendChat").addEventListener("click", sendChat);
+  document.getElementById("chatInput").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+
+  function renderHistory() {
+    const list = document.getElementById("historyList");
+    list.innerHTML = historyLog.map(h => `<div class="hist-item">${h}</div>`).join("");
+  }
+
+  // ── SUMMARIZE ──
+  document.getElementById("sendSummarize").addEventListener("click", async () => {
+    const email = document.getElementById("emailInput").value.trim();
+    if (!email) return;
+    document.getElementById("summaryLoading").style.display = "block";
+    document.getElementById("summaryOutput").style.display = "none";
+
+    const res = await fetch("/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    document.getElementById("summaryLoading").style.display = "none";
+    const out = document.getElementById("summaryOutput");
+    out.innerHTML = (data.summary || data.error).replace(/\n/g, "<br>");
+    out.style.display = "block";
+  });
+
+  // ── REWRITE ──
+  document.getElementById("sendRewrite").addEventListener("click", async () => {
+    const text = document.getElementById("rewriteInput").value.trim();
+    const style = document.getElementById("rewriteStyle").value;
+    if (!text) return;
+    document.getElementById("rewriteLoading").style.display = "block";
+    document.getElementById("rewriteOutput").style.display = "none";
+
+    const res = await fetch("/rewrite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, style })
+    });
+    const data = await res.json();
+    document.getElementById("rewriteLoading").style.display = "none";
+    const out = document.getElementById("rewriteOutput");
+    out.innerHTML = (data.result || data.error).replace(/\n/g, "<br>");
+    out.style.display = "block";
+  });
+
+  // ── TO-DOS ──
+  document.getElementById("sendTodos").addEventListener("click", async () => {
+    const text = document.getElementById("todosInput").value.trim();
+    if (!text) return;
+    document.getElementById("todosLoading").style.display = "block";
+    document.getElementById("todosOutput").style.display = "none";
+
+    const res = await fetch("/extract-todos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    document.getElementById("todosLoading").style.display = "none";
+    const out = document.getElementById("todosOutput");
+    out.innerHTML = (data.result || data.error).replace(/\n/g, "<br>");
+    out.style.display = "block";
+  });
+
+  // ── UTILS ──
+  function copyText(btn, text) {
+    navigator.clipboard.writeText(text);
+    btn.innerHTML = '<i class="ti ti-check"></i> Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i> Copy'; }, 2000);
+  }
+
+  function speakText(text) {
+    const u = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(u);
+  }
+</script>
+</body>
+</html>
