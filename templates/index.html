@@ -21,6 +21,8 @@
         <button class="nav-item" data-tab="summarize"><i class="ti ti-mail"></i> Summarize</button>
         <button class="nav-item" data-tab="rewrite"><i class="ti ti-pencil"></i> Rewrite</button>
         <button class="nav-item" data-tab="todos"><i class="ti ti-list-check"></i> To-Do Extractor</button>
+        <button class="nav-item" data-tab="pdfqa"><i class="ti ti-file-text"></i> PDF Q&A</button>
+        <button class="nav-item" data-tab="code"><i class="ti ti-code"></i> Code Explainer</button>
       </nav>
       <div class="sidebar-footer">
         <p class="history-label">Recent chats</p>
@@ -96,6 +98,75 @@
           <div class="output-box" id="todosOutput" style="display:none"></div>
         </div>
       </div>
+
+      <!-- ── TAB: PDF Q&A ── -->
+<div id="tab-pdfqa" class="tab-panel">
+  <div class="topbar"><span class="topbar-title">PDF Q&A</span></div>
+  <div class="tool-body">
+
+    <label class="upload-area" id="uploadArea">
+      <input type="file" id="pdfFile" accept=".pdf" style="display:none" />
+      <i class="ti ti-upload"></i>
+      <span id="uploadLabel">Click to upload a PDF (max 10MB)</span>
+    </label>
+
+    <div id="pdfInfo" class="pdf-info" style="display:none">
+      <i class="ti ti-file-filled"></i>
+      <span id="pdfName"></span>
+      <span id="pdfPages" class="badge"></span>
+      <button class="remove-btn" id="removePdf"><i class="ti ti-x"></i></button>
+    </div>
+
+    <input type="text" id="pdfQuestion" placeholder="Ask a question about the PDF..." />
+    <button class="action-btn" id="sendPdfQa"><i class="ti ti-search"></i> Ask</button>
+    <div id="pdfLoading" class="loading-text" style="display:none">Reading PDF and thinking...</div>
+    <div class="output-box" id="pdfOutput" style="display:none"></div>
+
+  </div>
+</div>
+
+<!-- ── TAB: CODE EXPLAINER ── -->
+<div id="tab-code" class="tab-panel">
+  <div class="topbar">
+    <span class="topbar-title">Code Explainer</span>
+    <select id="codeLanguage">
+      <option value="auto-detect">Auto-detect</option>
+      <option value="python">Python</option>
+      <option value="javascript">JavaScript</option>
+      <option value="c++">C++</option>
+      <option value="java">Java</option>
+      <option value="sql">SQL</option>
+      <option value="bash">Bash</option>
+    </select>
+  </div>
+  <div class="tool-body">
+
+    <textarea id="codeInput" placeholder="Paste your code here..." rows="8"
+      style="font-family: monospace; font-size: 13px;"></textarea>
+    <button class="action-btn" id="sendCode"><i class="ti ti-zoom-code"></i> Explain</button>
+    <div id="codeLoading" class="loading-text" style="display:none">Analyzing code...</div>
+
+    <div id="codeResult" style="display:none">
+      <div class="code-section">
+        <div class="section-label"><i class="ti ti-language"></i> Detected Language</div>
+        <div id="codeLang" class="lang-badge"></div>
+      </div>
+      <div class="code-section">
+        <div class="section-label"><i class="ti ti-book"></i> Explanation</div>
+        <div class="output-box" id="codeExplanation"></div>
+      </div>
+      <div class="code-section" id="bugsSection">
+        <div class="section-label"><i class="ti ti-bug"></i> Issues Found</div>
+        <div id="codeBugs"></div>
+      </div>
+      <div class="code-section">
+        <div class="section-label"><i class="ti ti-bulb"></i> Suggestion</div>
+        <div class="output-box suggestion-box" id="codeSuggestion"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
 
     </main>
   </div>
@@ -284,6 +355,107 @@
     const u = new SpeechSynthesisUtterance(text);
     window.speechSynthesis.speak(u);
   }
+
+  // ── PDF Q&A ──
+const pdfFileInput = document.getElementById("pdfFile");
+const uploadArea = document.getElementById("uploadArea");
+let currentPdfFile = null;
+
+uploadArea.addEventListener("click", () => pdfFileInput.click());
+
+pdfFileInput.addEventListener("change", () => {
+  const file = pdfFileInput.files[0];
+  if (!file) return;
+  currentPdfFile = file;
+  document.getElementById("uploadLabel").textContent = "PDF loaded";
+  document.getElementById("uploadArea").style.display = "none";
+  document.getElementById("pdfName").textContent = file.name;
+  document.getElementById("pdfInfo").style.display = "flex";
+});
+
+document.getElementById("removePdf").addEventListener("click", () => {
+  currentPdfFile = null;
+  pdfFileInput.value = "";
+  document.getElementById("uploadArea").style.display = "flex";
+  document.getElementById("pdfInfo").style.display = "none";
+  document.getElementById("pdfOutput").style.display = "none";
+  document.getElementById("uploadLabel").textContent = "Click to upload a PDF (max 10MB)";
+});
+
+document.getElementById("sendPdfQa").addEventListener("click", async () => {
+  if (!currentPdfFile) { alert("Please upload a PDF first."); return; }
+  const question = document.getElementById("pdfQuestion").value.trim() || "Summarize this document.";
+
+  document.getElementById("pdfLoading").style.display = "block";
+  document.getElementById("pdfOutput").style.display = "none";
+
+  const formData = new FormData();
+  formData.append("pdf", currentPdfFile);
+  formData.append("question", question);
+
+  const res = await fetch("/pdf-qa", { method: "POST", body: formData });
+  const data = await res.json();
+  document.getElementById("pdfLoading").style.display = "none";
+
+  const out = document.getElementById("pdfOutput");
+  if (data.pages) {
+    document.getElementById("pdfPages").textContent = data.pages + " pages";
+    document.getElementById("pdfPages").style.display = "inline";
+  }
+  out.innerHTML = (data.answer || data.error).replace(/\n/g, "<br>");
+  out.style.display = "block";
+});
+
+// ── CODE EXPLAINER ──
+document.getElementById("sendCode").addEventListener("click", async () => {
+  const code = document.getElementById("codeInput").value.trim();
+  const language = document.getElementById("codeLanguage").value;
+  if (!code) return;
+
+  document.getElementById("codeLoading").style.display = "block";
+  document.getElementById("codeResult").style.display = "none";
+
+  const res = await fetch("/explain-code", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, language })
+  });
+  const data = await res.json();
+  document.getElementById("codeLoading").style.display = "none";
+
+  if (data.error) {
+    document.getElementById("codeLoading").textContent = "Error: " + data.error;
+    return;
+  }
+
+  // Populate results
+  document.getElementById("codeLang").textContent = data.language || language;
+  document.getElementById("codeExplanation").textContent = data.explanation;
+  document.getElementById("codeSuggestion").textContent = data.suggestion;
+
+  // Bugs list
+  const bugsDiv = document.getElementById("codeBugs");
+  const bugsSection = document.getElementById("bugsSection");
+  if (data.bugs && data.bugs.length > 0) {
+    bugsDiv.innerHTML = data.bugs.map(b =>
+      `<div class="bug-item"><i class="ti ti-alert-triangle"></i> ${b}</div>`
+    ).join("");
+    bugsSection.style.display = "block";
+  } else {
+    bugsDiv.innerHTML = `<div class="bug-item no-bug"><i class="ti ti-circle-check"></i> No issues found</div>`;
+    bugsSection.style.display = "block";
+  }
+
+  // Syntax highlight the original code in a block
+  const highlighted = hljs.highlightAuto(code).value;
+  document.getElementById("codeExplanation").insertAdjacentHTML("beforebegin",
+    `<pre class="code-preview"><code>${highlighted}</code></pre>`
+  );
+
+  document.getElementById("codeResult").style.display = "block";
+});
 </script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </body>
 </html>
